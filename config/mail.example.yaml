@@ -1,0 +1,12 @@
+smtp_host:
+  - smtp.qq.com
+smtp_port:
+  - 465
+smtp_user:
+  - your@qq.com
+smtp_password:
+  - your_smtp_authorization_code
+mail_from:
+  - your@qq.com
+mail_to:
+  - 1545103938@qq.com

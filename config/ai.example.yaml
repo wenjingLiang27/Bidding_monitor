@@ -1,0 +1,10 @@
+provider:
+  - deepseek
+base_url:
+  - https://api.deepseek.com/chat/completions
+model:
+  - deepseek-v4-pro
+api_key:
+  - your_deepseek_api_key
+timeout:
+  - 45

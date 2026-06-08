@@ -1,0 +1,8 @@
+match_type:
+  body: 1
+  zip: 2
+  title: 3
+
+source_weights:
+  中国政府采购网: 10
+  中国政府采购网(搜索): 10
