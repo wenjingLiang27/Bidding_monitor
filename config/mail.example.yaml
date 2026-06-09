@@ -9,4 +9,4 @@ smtp_password:
 mail_from:
   - your@qq.com
 mail_to:
-  - 1545103938@qq.com
+  - recipient@example.com

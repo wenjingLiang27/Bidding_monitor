@@ -78,12 +78,19 @@ def _fetch_one(item: Item, rules, fetcher):
     body = fetcher.fetch_text(item.url, timeout=15)
     if body and len(body) > 50:
         item.body = body
-        matched, kws = rules.is_body_match(item.title, body)
-        if matched:
+        result = rules.classify_text(f"{item.title}\n{body}")
+        item._matched_kws = result["matched"]
+        item._business_hit = result["business_hit"]
+        item._non_target_hit = result["non_target_hit"]
+        item._auto_label = result["label"]
+        if result["label"] in ("A", "B"):
             item._match_type = "body"
-            item._matched_kws = kws
             item._filter_stage = "passed"
             return item
+        if result["label"] == "C":
+            item._filter_stage = "non_target"
+            return item
+
     item._filter_stage = "needs_zip"
     return item
 

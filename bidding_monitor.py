@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""招标监控入口脚本。"""
+"""Bidding monitor command-line entry point."""
 import argparse
 import os
 import sys
@@ -14,7 +14,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--no-ai", action="store_true", help="跳过 AI 分析")
     parser.add_argument("--dry-run", action="store_true", help="只打印结果，不发送邮件")
     parser.add_argument("--date", help="指定日期 YYYY-MM-DD")
-    parser.add_argument("--days", type=int, default=2, help="向前覆盖天数，默认 2（昨天到今天）")
+    parser.add_argument("--days", type=int, default=2, help="向前覆盖天数，默认 2")
     parser.add_argument("--url", action="append", default=[], help="直接检查公告 URL，可传多次")
     parser.add_argument("--urls-file", help="从文件读取公告 URL，每行一个")
 
@@ -22,8 +22,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--kw", help="按关键词过滤标注/统计结果")
     parser.add_argument("--show-labeled", action="store_true", help="包含已标注项目")
     parser.add_argument("--stats-detail", action="store_true", help="输出标注统计")
-    parser.add_argument("--show-samples", type=int, default=0, help="统计时每类展示样例数")
-    parser.add_argument("--suggest-labels", action="store_true", help="根据业务边界输出建议标签，不落库")
+    parser.add_argument("--show-samples", type=int, default=0, help="统计时每类展示样本数")
+    parser.add_argument("--suggest-labels", action="store_true", help="输出建议标签，不落库")
     parser.add_argument("--label-url", nargs=2, metavar=("URL", "LABEL"), help="按 URL 写入人工标签 A/B/C")
     parser.add_argument("--label-batch", nargs=2, metavar=("LABEL", "KW"), help="按关键词批量写入人工标签 A/B/C")
     parser.add_argument("--label-note", default="", help="标注备注")
@@ -38,7 +38,7 @@ if __name__ == "__main__":
 
     script_dir = os.path.dirname(os.path.abspath(__file__))
     config_dir = os.path.join(script_dir, "config")
-    data_dir = os.getenv("BIDDING_DATA_DIR") or os.path.expanduser("~/.hermes/bidding_data")
+    data_dir = os.getenv("BIDDING_DATA_DIR") or os.path.join(script_dir, "data")
 
     scheduler = Scheduler(config_dir, data_dir)
     scheduler.refresh_window(args.date, args.days)
@@ -48,8 +48,10 @@ if __name__ == "__main__":
         print(f"  [模式] 整月覆盖: {scheduler.YESTERDAY} ~ {scheduler.TODAY}")
 
     if args.test:
-        scheduler.mail_to = "1545103938@qq.com"
-        print("  [模式] 测试模式（仅发送到 1545103938@qq.com）")
+        test_to = os.getenv("BIDDING_TEST_MAIL_TO") or os.getenv("MAIL_TO") or ""
+        if test_to:
+            scheduler.mailer.mail_to = [x.strip() for x in test_to.split(",") if x.strip()]
+        print("  [模式] 测试模式：仅发送到 BIDDING_TEST_MAIL_TO/MAIL_TO 配置的地址")
 
     if args.pending_label:
         scheduler.show_pending_label(args.kw, args.show_labeled)

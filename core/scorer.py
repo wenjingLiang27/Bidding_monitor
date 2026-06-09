@@ -26,6 +26,10 @@ class Scorer:
                 item._filter_stage = "needs_body"
                 item._domain_hints = result["domains"]
                 passed.append(item)
+            elif result["reason"] == "no_test" and result.get("domains", {}).get("it"):
+                item._filter_stage = "needs_body"
+                item._domain_hints = result["domains"]
+                passed.append(item)
             else:
                 item._filter_stage = result["reason"]
         return passed
@@ -42,7 +46,42 @@ class Scorer:
         sw = self.weights.get("source_weights", {})
         type_priority = mt.get(item._match_type, 5)
         source_weight = sw.get(item.source, 1)
-        item._score = type_priority * 100 - source_weight
+        score = type_priority * 100 - source_weight
+
+        hits = set(item._matched_kws)
+        strong_hits = {"渗透测试", "漏洞扫描", "代码审计", "软件测试", "系统测试", "第三方软件测试"}
+        borderline_hits = {
+            "网络安全检测",
+            "网络安全测评",
+            "网络安全评估",
+            "安全检测",
+            "安全测评",
+            "安全评估",
+            "风险评估",
+            "验收测评",
+            "验收测试",
+            "第三方测试",
+        }
+        non_target_hits = set(item._non_target_hit)
+        business_hits = set(item._business_hit)
+        borderline_only_hits = hits - business_hits - non_target_hits
+
+        if business_hits:
+            score -= 18
+        elif borderline_only_hits:
+            score += 25
+
+        score -= 12 * len(hits & strong_hits)
+        score -= 5 * len(hits & borderline_hits)
+        score -= min(8, max(0, len(hits) - 1) * 2)
+        if hits & strong_hits:
+            score += min(6, 3 * len(non_target_hits))
+        else:
+            score += 12 * len(non_target_hits)
+
+        if item._match_type == "zip":
+            score += 20
+        item._score = max(1, score)
 
     def sort(self, items: List[Item]) -> List[Item]:
         for item in items:

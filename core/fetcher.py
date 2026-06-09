@@ -1,11 +1,12 @@
-import html as html_mod
 import os
 import re
 import subprocess
 import time
 import hashlib
 from datetime import date
+from pathlib import Path
 from typing import Iterable, List, Optional
+from urllib.parse import urlencode
 
 import urllib.request
 
@@ -19,7 +20,8 @@ except ImportError:  # pragma: no cover - fallback for minimal environments
     requests = None
 
 
-CACHE_DIR = os.path.expanduser("~/.hermes/cache/fetcher")
+PROJECT_DIR = Path(__file__).resolve().parents[1]
+CACHE_DIR = str(PROJECT_DIR / "cache" / "fetcher")
 SMART_FETCH_DIR = os.path.expanduser("~/.hermes/skills/productivity/smart-web-fetch/scripts")
 SCRAPLING_SCRIPT = os.path.join(SMART_FETCH_DIR, "fetch_scrapling.py")
 CACHE_TTL_TEXT = 7200
@@ -37,6 +39,8 @@ class _DiskCache:
         return os.path.join(self.dir, f"{h}{suffix}")
 
     def get(self, url: str, suffix: str = "", ttl: int = CACHE_TTL_TEXT) -> Optional[str]:
+        if ttl == 0:
+            return None
         path = self._key(url, suffix)
         if not os.path.exists(path):
             return None
@@ -270,6 +274,7 @@ class Fetcher:
 
 class CCGPFetcher:
     BASE = "https://www.ccgp.gov.cn"
+    SEARCH_BASE = "https://search.ccgp.gov.cn/bxsearch"
     CHANNELS = [
         "/cggg/zygg/gkzb/",
         "/cggg/zygg/jzxcs/",
@@ -281,7 +286,7 @@ class CCGPFetcher:
         # 列表页变化很快，默认不使用 HTML 缓存；详情页仍由其他管道缓存。
         self.fetcher = Fetcher(ttl_html=list_cache_ttl)
 
-    def fetch_recent(self, start: date, end: date, pages_per_channel: int = 3) -> List[Item]:
+    def fetch_recent(self, start: date, end: date, pages_per_channel: int = 30) -> List[Item]:
         items = []
         seen = set()
         for channel in self.CHANNELS:
@@ -293,11 +298,56 @@ class CCGPFetcher:
                 except Exception as exc:
                     print(f"  [抓取失败] {page_url}: {exc}")
                     continue
-                for url, title in self._parse_list(page, page_url):
+                parsed = self._parse_list(page, page_url)
+                if not parsed:
+                    break
+                page_has_window_item = False
+                page_is_before_window = True
+                for url, title in parsed:
                     if url in seen:
                         continue
                     seen.add(url)
                     item = Item(title=title, url=url, source="中国政府采购网")
+                    item_date = self._date_from_url(item.url)
+                    if item_date is not None:
+                        item.publish_date = item_date.isoformat()
+                        if item_date >= start:
+                            page_is_before_window = False
+                    else:
+                        page_is_before_window = False
+                    if self._looks_in_window(item, start, end):
+                        page_has_window_item = True
+                        items.append(item)
+                if not page_has_window_item and page_is_before_window:
+                    break
+        return items
+
+    def fetch_keyword_search(
+        self,
+        keywords: Iterable[str],
+        start: date,
+        end: date,
+        pages_per_keyword: int = 1,
+    ) -> List[Item]:
+        items = []
+        seen = set()
+        for kw in keywords:
+            kw = (kw or "").strip()
+            if not kw:
+                continue
+            for page_index in range(1, pages_per_keyword + 1):
+                page_url = self._search_url(kw, start, end, page_index)
+                page = self.fetcher.fetch_html(page_url, timeout=15)
+                if not page:
+                    continue
+                if "访问过于频繁" in page or "频繁访问" in page:
+                    print(f"  [搜索跳过] {kw}: 访问过于频繁")
+                    break
+                for url, title in self._parse_list(page, page_url):
+                    if url in seen:
+                        continue
+                    seen.add(url)
+                    item = Item(title=title, url=url, source="中国政府采购网(搜索)")
                     if self._looks_in_window(item, start, end):
                         items.append(item)
         return items
@@ -324,9 +374,29 @@ class CCGPFetcher:
     def _index_urls(self, channel: str, pages: int):
         base = self.BASE + channel
         yield base
-        yield base + "index.htm"
         for i in range(1, pages):
             yield base + f"index_{i}.htm"
+
+    def _search_url(self, keyword: str, start: date, end: date, page_index: int):
+        params = {
+            "searchtype": "1",
+            "page_index": str(page_index),
+            "bidSort": "0",
+            "buyerName": "",
+            "projectId": "",
+            "pinMu": "0",
+            "bidType": "0",
+            "dbselect": "bidx",
+            "kw": keyword,
+            "start_time": start.strftime("%Y:%m:%d"),
+            "end_time": end.strftime("%Y:%m:%d"),
+            "timeType": "6",
+            "displayZone": "",
+            "zoneId": "",
+            "pppStatus": "0",
+            "agentName": "",
+        }
+        return f"{self.SEARCH_BASE}?{urlencode(params)}"
 
     def _parse_list(self, page: str, page_url: str):
         results = []
@@ -339,9 +409,14 @@ class CCGPFetcher:
         return results
 
     def _looks_in_window(self, item: Item, start: date, end: date) -> bool:
-        m = re.search(r"/(20\d{4})/t(20\d{6})_", item.url)
-        if not m:
+        d = self._date_from_url(item.url)
+        if d is None:
             return True
-        stamp = m.group(2)
-        d = date(int(stamp[:4]), int(stamp[4:6]), int(stamp[6:8]))
         return start <= d <= end
+
+    def _date_from_url(self, url: str):
+        m = re.search(r"/(20\d{4})/t(20\d{6})_", url)
+        if not m:
+            return None
+        stamp = m.group(2)
+        return date(int(stamp[:4]), int(stamp[4:6]), int(stamp[6:8]))

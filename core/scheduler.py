@@ -48,6 +48,10 @@ class Scheduler:
         else:
             print(f"  [窗口] {self.YESTERDAY} ~ {self.TODAY}")
             items = self.fetcher.fetch_recent(self.YESTERDAY, self.TODAY)
+            items = self._merge_items(
+                items,
+                self.fetcher.fetch_keyword_search(self.rules.accept_kws, self.YESTERDAY, self.TODAY),
+            )
 
         passed = self.scorer.filter(items)
         checked = body_fetch_pipeline(passed, self.rules, self.http)
@@ -156,6 +160,7 @@ class Scheduler:
 
     def _classify_item(self, item: Item):
         result = self.rules.classify_text(f"{item.title}\n{item.body}")
+        item._auto_label = result["label"]
         item._matched_kws = result["matched"]
         item._business_hit = result["business_hit"]
         item._non_target_hit = result["non_target_hit"]
@@ -193,7 +198,7 @@ class Scheduler:
         for i, item in enumerate(items, 1):
             print(f"{i}. {item.title}")
             print(f"   {item.url}")
-            print(f"   kws={','.join(item._matched_kws)} score={item._score}")
+            print(f"   label={item._auto_label or '-'} kws={','.join(item._matched_kws)} score={item._score}")
             if item._ai_analysis:
                 print(f"   ai={item._ai_analysis}")
 
@@ -207,6 +212,14 @@ class Scheduler:
             print(f"  [邮件] 已发送到 {', '.join(self.mailer.mail_to)}")
         except Exception as exc:
             print(f"  [邮件] 发送失败：{exc}")
+
+    def _merge_items(self, base: List[Item], extra: List[Item]) -> List[Item]:
+        seen = {item.url for item in base}
+        for item in extra:
+            if item.url not in seen:
+                seen.add(item.url)
+                base.append(item)
+        return base
 
     def _split(self, value: str):
         return [x for x in (value or "").split(",") if x]

@@ -52,6 +52,94 @@ class KeywordEngine:
     def _hits(self, text: str, kws: List[str]) -> List[str]:
         return [kw for kw in kws if kw and kw.lower() in text.lower()]
 
+    def _filter_generic_safety_hits(self, text: str, hits: List[str]) -> List[str]:
+        generic = {"安全检测", "安全测评", "安全评估", "安全评价", "风险评估"}
+        cyber_context = [
+            "网络安全",
+            "信息安全",
+            "信息系统",
+            "信息化",
+            "软件",
+            "应用安全",
+            "密码",
+            "代码",
+            "漏洞",
+            "渗透",
+            "等级保护",
+            "等保",
+            "密评",
+        ]
+        physical_context = [
+            "消防",
+            "档案",
+            "道路",
+            "交通",
+            "危险化学品",
+            "危化品",
+            "工程",
+            "设施",
+            "维修维护",
+            "监控维修",
+            "食品",
+            "药品",
+            "水质",
+            "环境",
+            "数据安全",
+        ]
+        filtered = []
+        for hit in hits:
+            if hit not in generic:
+                filtered.append(hit)
+                continue
+            idx = text.find(hit)
+            window = text[max(0, idx - 80): idx + len(hit) + 80] if idx >= 0 else text
+            if any(word in window for word in physical_context):
+                continue
+            if any(word in window for word in cyber_context):
+                filtered.append(hit)
+        return filtered
+
+    def _filter_generic_business_hits(self, text: str, hits: List[str]) -> List[str]:
+        generic = {"系统测试"}
+        target_context = [
+            "软件",
+            "信息系统",
+            "应用系统",
+            "业务系统",
+            "平台",
+            "网络安全",
+            "信息安全",
+            "漏洞",
+            "代码",
+            "渗透",
+            "测评服务",
+            "测试服务",
+        ]
+        equipment_context = [
+            "设备",
+            "仪器",
+            "装置",
+            "硬件",
+            "供货",
+            "调试",
+            "安装",
+            "采购",
+            "货物",
+            "试验仪器",
+            "电转染",
+        ]
+        filtered = []
+        for hit in hits:
+            if hit not in generic:
+                filtered.append(hit)
+                continue
+            idx = text.find(hit)
+            window = text[max(0, idx - 120): idx + len(hit) + 120] if idx >= 0 else text
+            if any(word in window for word in equipment_context) and not any(word in window for word in target_context):
+                continue
+            filtered.append(hit)
+        return filtered
+
     def is_closed(self, text: str) -> bool:
         return bool(self._hits(text, self.keywords["closed"]))
 
@@ -75,12 +163,16 @@ class KeywordEngine:
         return {"action": "body", "domains": {"it": it_hits, "test": test_hits}}
 
     def classify_text(self, text: str) -> Dict:
-        business = self._hits(text, self.accept_kws)
-        borderline = self._hits(text, self.borderline_kws)
+        business = self._filter_generic_business_hits(text, self._hits(text, self.accept_kws))
+        borderline = self._filter_generic_safety_hits(text, self._hits(text, self.borderline_kws))
         non_target = self._hits(text, self.reject_kws)
         matched = list(dict.fromkeys(business + borderline + non_target))
+        strong_direct = {"渗透测试", "代码审计", "软件测试", "系统测试", "第三方软件测试"}
+        maintenance_context = ["运行维护", "维保", "设备维保", "安全产品", "授权续费", "升级服务"]
 
-        if business and non_target:
+        if business and (strong_direct & set(business)):
+            label, reason = "A", "命中核心目标业务词"
+        elif business and non_target:
             label, reason = "B", "目标业务与非目标业务同时出现"
         elif business:
             label, reason = "A", "命中目标业务词"

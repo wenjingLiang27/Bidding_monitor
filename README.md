@@ -11,13 +11,19 @@ python bidding_monitor.py --dry-run --no-ai
 
 默认采集窗口为昨天到今天，即 T-1 00:00 到今天。
 
-数据默认保存在：
+数据默认保存在项目目录：
 
 ```text
-~\.hermes\bidding_data\bidding.sqlite3
+D:\WSL\bidding-monitor\data\bidding.sqlite3
 ```
 
-如需改到项目内或其他位置，可设置 `BIDDING_DATA_DIR`。
+抓取缓存默认保存在：
+
+```text
+D:\WSL\bidding-monitor\cache\fetcher
+```
+
+如需改到其他位置，可设置 `BIDDING_DATA_DIR`。
 
 检查指定公告：
 

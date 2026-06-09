@@ -25,7 +25,7 @@ def _load_mail_config(config_dir: str) -> dict:
 
 
 class Mailer:
-    """SMTP 邮件发送器，支持环境变量或 config/mail.yaml。"""
+    """SMTP mail sender using environment variables or config/mail.yaml."""
 
     def __init__(self, config_dir: str):
         cfg = _load_mail_config(config_dir)
@@ -62,7 +62,7 @@ class Mailer:
     def send_report(self, items: Iterable[Item], start_date, end_date) -> bool:
         items = list(items)
         msg = EmailMessage()
-        msg["Subject"] = f"招标监控日报 {start_date} ~ {end_date}：{len(items)} 条"
+        msg["Subject"] = f"招标监控日报 {start_date} ~ {end_date}: {len(items)} 条"
         msg["From"] = self.mail_from
         msg["To"] = ", ".join(self.mail_to)
         msg.set_content(self._render_text(items, start_date, end_date))
@@ -84,7 +84,7 @@ class Mailer:
         if not items:
             lines.append("今日暂无命中项目。")
         for idx, item in enumerate(items, 1):
-            lines.append(f"{idx}. {item.title}")
+            lines.append(f"{idx}. [{item._auto_label or '-'}] {item.title}")
             lines.append(f"   {item.url}")
             lines.append(f"   关键词：{', '.join(item._matched_kws) or '-'}")
             if item._ai_analysis:
@@ -99,13 +99,14 @@ class Mailer:
             url = html.escape(item.url)
             kws = html.escape(", ".join(item._matched_kws) or "-")
             ai = html.escape(item._ai_analysis or "-")
+            label = html.escape(item._auto_label or "-")
             rows.append(
                 "<tr>"
                 f"<td>{idx}</td>"
                 f"<td><a href=\"{url}\">{title}</a></td>"
+                f"<td>{label}</td>"
                 f"<td>{kws}</td>"
                 f"<td>{ai}</td>"
-                f"<td>{item._score}</td>"
                 "</tr>"
             )
         if not rows:
@@ -115,7 +116,7 @@ class Mailer:
             f"<h2>招标监控 {start_date} ~ {end_date}</h2>"
             f"<p>共 {len(items)} 条</p>"
             "<table border=\"1\" cellpadding=\"6\" cellspacing=\"0\">"
-            "<thead><tr><th>#</th><th>项目</th><th>关键词</th><th>AI分析</th><th>分数</th></tr></thead>"
+            "<thead><tr><th>#</th><th>项目</th><th>分类</th><th>关键词</th><th>AI分析</th></tr></thead>"
             f"<tbody>{''.join(rows)}</tbody>"
             "</table></body></html>"
         )

@@ -25,6 +25,7 @@ class Store:
               body text,
               filter_stage text,
               match_type text,
+              auto_label text,
               score integer,
               matched_kws text,
               business_hit text,
@@ -38,6 +39,7 @@ class Store:
             """
         )
         self._ensure_column("items", "ai_analysis", "text")
+        self._ensure_column("items", "auto_label", "text")
         self.conn.commit()
 
     def _ensure_column(self, table: str, column: str, decl: str):
@@ -49,9 +51,9 @@ class Store:
         self.conn.execute(
             """
             insert into items
-              (url,title,source,publish_date,body,filter_stage,match_type,score,
+              (url,title,source,publish_date,body,filter_stage,match_type,auto_label,score,
                matched_kws,business_hit,non_target_hit,ai_analysis)
-            values (?,?,?,?,?,?,?,?,?,?,?,?)
+            values (?,?,?,?,?,?,?,?,?,?,?,?,?)
             on conflict(url) do update set
               title=excluded.title,
               source=excluded.source,
@@ -59,6 +61,7 @@ class Store:
               body=coalesce(nullif(excluded.body,''), items.body),
               filter_stage=excluded.filter_stage,
               match_type=excluded.match_type,
+              auto_label=excluded.auto_label,
               score=excluded.score,
               matched_kws=excluded.matched_kws,
               business_hit=excluded.business_hit,
@@ -74,6 +77,7 @@ class Store:
                 item.body,
                 item._filter_stage,
                 item._match_type,
+                item._auto_label,
                 item._score,
                 ",".join(item._matched_kws),
                 ",".join(item._business_hit),

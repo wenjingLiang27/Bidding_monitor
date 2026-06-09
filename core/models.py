@@ -12,6 +12,7 @@ class Item:
 
     _filter_stage: str = ""
     _match_type: str = ""
+    _auto_label: str = ""
     _score: int = 999
     _matched_kws: List[str] = field(default_factory=list)
     _business_hit: List[str] = field(default_factory=list)
