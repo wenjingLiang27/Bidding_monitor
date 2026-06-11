@@ -1,3 +1,4 @@
+import re
 from collections import defaultdict
 from datetime import date, datetime, timedelta
 from pathlib import Path
@@ -47,10 +48,12 @@ class Scheduler:
             items = self.fetcher.fetch_urls(urls)
         else:
             print(f"  [窗口] {self.YESTERDAY} ~ {self.TODAY}")
-            items = self.fetcher.fetch_recent(self.YESTERDAY, self.TODAY)
+            # 先关键词全文搜索，再日期搜索兜底，最后浏览列表
+            keywords = self.rules.accept_kws + [""]  # 6个业务关键词 + 日期兜底
+            items = self.fetcher.fetch_keyword_search(keywords, self.YESTERDAY, self.TODAY, pages_per_keyword=1)
             items = self._merge_items(
                 items,
-                self.fetcher.fetch_keyword_search(self.rules.accept_kws, self.YESTERDAY, self.TODAY),
+                self.fetcher.fetch_recent(self.YESTERDAY, self.TODAY),
             )
 
         passed = self.scorer.filter(items)
@@ -66,6 +69,18 @@ class Scheduler:
         final = self.scorer.sort(final)
         if ai_enabled:
             self._analyze_items(final)
+            ai_c_count = 0
+            kept = []
+            for item in final:
+                if re.search(r"建议[：:]\\s*C\\b", item._ai_analysis or ""):
+                    item._filter_stage = "ai_c"
+                    item._match_type = ""
+                    ai_c_count += 1
+                else:
+                    kept.append(item)
+            if ai_c_count:
+                print(f"  [AI过滤] 剔除 AI 判 C 的 {ai_c_count} 条")
+            final = kept
 
         for item in items:
             self.store.upsert(item)
@@ -169,8 +184,10 @@ class Scheduler:
             item._filter_stage = "final"
             item._match_type = "body"
         elif result["label"] == "C":
+            item._match_type = ""
             item._filter_stage = "non_target"
         else:
+            item._match_type = ""
             item._filter_stage = "body_no_match"
 
     def _analyze_items(self, items: List[Item]):
@@ -214,10 +231,12 @@ class Scheduler:
             print(f"  [邮件] 发送失败：{exc}")
 
     def _merge_items(self, base: List[Item], extra: List[Item]) -> List[Item]:
-        seen = {item.url for item in base}
+        def _key(url: str) -> str:
+            return url.replace("http://", "https://")
+        seen = {_key(item.url) for item in base}
         for item in extra:
-            if item.url not in seen:
-                seen.add(item.url)
+            if _key(item.url) not in seen:
+                seen.add(_key(item.url))
                 base.append(item)
         return base
 

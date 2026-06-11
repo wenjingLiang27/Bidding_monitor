@@ -83,6 +83,7 @@ def _backend_requests(url: str, timeout: int = 10) -> Optional[str]:
             url,
             headers={
                 "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+                "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
                 "Accept-Language": "zh-CN,zh;q=0.9",
             },
             timeout=timeout,
@@ -100,7 +101,8 @@ def _backend_urllib(url: str, timeout: int = 10) -> Optional[str]:
         req = urllib.request.Request(
             url,
             headers={
-                "User-Agent": "Mozilla/5.0 bidding-monitor/1.0",
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+                "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
                 "Accept-Language": "zh-CN,zh;q=0.9",
             },
         )
@@ -286,7 +288,7 @@ class CCGPFetcher:
         # 列表页变化很快，默认不使用 HTML 缓存；详情页仍由其他管道缓存。
         self.fetcher = Fetcher(ttl_html=list_cache_ttl)
 
-    def fetch_recent(self, start: date, end: date, pages_per_channel: int = 30) -> List[Item]:
+    def fetch_recent(self, start: date, end: date, pages_per_channel: int = 999) -> List[Item]:
         items = []
         seen = set()
         for channel in self.CHANNELS:
@@ -301,8 +303,7 @@ class CCGPFetcher:
                 parsed = self._parse_list(page, page_url)
                 if not parsed:
                     break
-                page_has_window_item = False
-                page_is_before_window = True
+                page_max_date = None
                 for url, title in parsed:
                     if url in seen:
                         continue
@@ -311,14 +312,12 @@ class CCGPFetcher:
                     item_date = self._date_from_url(item.url)
                     if item_date is not None:
                         item.publish_date = item_date.isoformat()
-                        if item_date >= start:
-                            page_is_before_window = False
-                    else:
-                        page_is_before_window = False
+                        if page_max_date is None or item_date > page_max_date:
+                            page_max_date = item_date
                     if self._looks_in_window(item, start, end):
-                        page_has_window_item = True
                         items.append(item)
-                if not page_has_window_item and page_is_before_window:
+                # 整页最新日期都在窗口之前 → 已经翻到 T-1 之前的页面，停止
+                if page_max_date is not None and page_max_date < start:
                     break
         return items
 
@@ -331,25 +330,33 @@ class CCGPFetcher:
     ) -> List[Item]:
         items = []
         seen = set()
+        time.sleep(30)  # 搜索接口冷却
+        # 搜索接口用裸 urllib 避开 Fetcher 缓存
         for kw in keywords:
             kw = (kw or "").strip()
-            if not kw:
-                continue
             for page_index in range(1, pages_per_keyword + 1):
+                if page_index > 1:
+                    time.sleep(5)
                 page_url = self._search_url(kw, start, end, page_index)
-                page = self.fetcher.fetch_html(page_url, timeout=15)
+                page = _backend_requests(page_url, timeout=15) or _backend_urllib(page_url, timeout=15) or ""
                 if not page:
                     continue
                 if "访问过于频繁" in page or "频繁访问" in page:
-                    print(f"  [搜索跳过] {kw}: 访问过于频繁")
-                    break
+                    print(f"  [搜索跳过] {kw or '(日期)'}: 访问过于频繁")
+                    time.sleep(60)
+                    continue
                 for url, title in self._parse_list(page, page_url):
                     if url in seen:
                         continue
                     seen.add(url)
                     item = Item(title=title, url=url, source="中国政府采购网(搜索)")
+                    item_date = self._date_from_url(item.url)
+                    if item_date is not None:
+                        item.publish_date = item_date.isoformat()
                     if self._looks_in_window(item, start, end):
                         items.append(item)
+                if page_index == 1:
+                    time.sleep(10)  # 关键词间间隔
         return items
 
     def fetch_urls(self, urls: Iterable[str]) -> List[Item]:
@@ -378,8 +385,9 @@ class CCGPFetcher:
             yield base + f"index_{i}.htm"
 
     def _search_url(self, keyword: str, start: date, end: date, page_index: int):
+        """searchtype=2 全文搜索，keyword 为空时按日期范围"""
         params = {
-            "searchtype": "1",
+            "searchtype": "2",
             "page_index": str(page_index),
             "bidSort": "0",
             "buyerName": "",
@@ -387,7 +395,7 @@ class CCGPFetcher:
             "pinMu": "0",
             "bidType": "0",
             "dbselect": "bidx",
-            "kw": keyword,
+            "kw": keyword or "",
             "start_time": start.strftime("%Y:%m:%d"),
             "end_time": end.strftime("%Y:%m:%d"),
             "timeType": "6",

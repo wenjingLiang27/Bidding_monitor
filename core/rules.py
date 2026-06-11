@@ -92,7 +92,7 @@ class KeywordEngine:
                 filtered.append(hit)
                 continue
             idx = text.find(hit)
-            window = text[max(0, idx - 80): idx + len(hit) + 80] if idx >= 0 else text
+            window = text[max(0, idx - 300): idx + len(hit) + 300] if idx >= 0 else text
             if any(word in window for word in physical_context):
                 continue
             if any(word in window for word in cyber_context):
@@ -100,7 +100,7 @@ class KeywordEngine:
         return filtered
 
     def _filter_generic_business_hits(self, text: str, hits: List[str]) -> List[str]:
-        generic = {"系统测试"}
+        generic = {"系统测试", "软件测试"}
         target_context = [
             "软件",
             "信息系统",
@@ -128,14 +128,42 @@ class KeywordEngine:
             "试验仪器",
             "电转染",
         ]
+        dev_context = [
+            "国产化改造",
+            "系统改造",
+            "信息化改造",
+            "升级改造",
+            "新建系统",
+            "系统建设",
+            "系统集成",
+            "集成项目",
+            "总集",
+            "集成服务",
+        ]
+        # 软件测试工具/产品采购上下文（非测试服务，应过滤）
+        tool_purchase_kws = [
+            "测试系统", "测试平台", "测试工具", "测试产品",
+            "软件系统", "软件产品", "软件平台", "系统采购",
+        ]
+        service_override_kws = ["测试服务", "测评服务", "服务外包", "委托测试"]
         filtered = []
         for hit in hits:
             if hit not in generic:
                 filtered.append(hit)
                 continue
             idx = text.find(hit)
-            window = text[max(0, idx - 120): idx + len(hit) + 120] if idx >= 0 else text
+            window = text[max(0, idx - 300): idx + len(hit) + 300] if idx >= 0 else text
+            
+            # 「软件测试」：检测是否为工具/产品采购而非测试服务
+            if hit == "软件测试":
+                if any(word in window for word in tool_purchase_kws) and not any(word in window for word in service_override_kws):
+                    continue
+                filtered.append(hit)
+                continue
+            
             if any(word in window for word in equipment_context) and not any(word in window for word in target_context):
+                continue
+            if any(word in window for word in dev_context):
                 continue
             filtered.append(hit)
         return filtered
@@ -168,9 +196,12 @@ class KeywordEngine:
         non_target = self._hits(text, self.reject_kws)
         matched = list(dict.fromkeys(business + borderline + non_target))
         strong_direct = {"渗透测试", "代码审计", "软件测试", "系统测试", "第三方软件测试"}
-        maintenance_context = ["运行维护", "维保", "设备维保", "安全产品", "授权续费", "升级服务"]
 
-        if business and (strong_direct & set(business)):
+        # 硬拒绝：运维/维保类项目一律 C，即使同时命中业务关键词
+        ops_kws = {"运维", "运维服务", "集约运维", "运行维护", "安全运维", "网络运维", "系统运维", "维保服务"}
+        if ops_kws & set(non_target):
+            label, reason = "C", "硬拒绝：命中运维/维保类非目标词"
+        elif business and (strong_direct & set(business)):
             label, reason = "A", "命中核心目标业务词"
         elif business and non_target:
             label, reason = "B", "目标业务与非目标业务同时出现"
