@@ -113,7 +113,7 @@ class KeywordEngine:
         return filtered
 
     def _filter_generic_business_hits(self, text: str, hits: List[str]) -> List[str]:
-        generic = {"系统测试", "软件测试", "软件测评"}
+        generic = {"系统测试", "软件测试", "软件测评", "漏洞扫描"}
         target_context = [
             "软件",
             "信息系统",
