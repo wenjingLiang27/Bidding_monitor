@@ -49,7 +49,7 @@ class Scorer:
         score = type_priority * 100 - source_weight
 
         hits = set(item._matched_kws)
-        strong_hits = {"渗透测试", "漏洞扫描", "代码审计", "软件测试", "系统测试", "第三方软件测试"}
+        strong_hits = {"渗透测试", "漏洞扫描", "代码审计", "软件测试", "软件测评", "系统测试", "第三方软件测试"}
         borderline_hits = {
             "网络安全检测",
             "网络安全测评",

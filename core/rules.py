@@ -100,7 +100,7 @@ class KeywordEngine:
         return filtered
 
     def _filter_generic_business_hits(self, text: str, hits: List[str]) -> List[str]:
-        generic = {"系统测试", "软件测试"}
+        generic = {"系统测试", "软件测试", "软件测评"}
         target_context = [
             "软件",
             "信息系统",
@@ -141,10 +141,8 @@ class KeywordEngine:
             "集成服务",
         ]
         # 软件测试工具/产品采购上下文（非测试服务，应过滤）
-        tool_purchase_kws = [
-            "测试系统", "测试平台", "测试工具", "测试产品",
-            "软件系统", "软件产品", "软件平台", "系统采购",
-        ]
+        tool_purchase_kws = ["测试系统", "测试平台", "测试工具", "测试产品",
+                            "软件系统", "软件产品", "软件平台", "系统采购", "平台"]
         service_override_kws = ["测试服务", "测评服务", "服务外包", "委托测试"]
         filtered = []
         for hit in hits:
@@ -154,8 +152,8 @@ class KeywordEngine:
             idx = text.find(hit)
             window = text[max(0, idx - 300): idx + len(hit) + 300] if idx >= 0 else text
             
-            # 「软件测试」：检测是否为工具/产品采购而非测试服务
-            if hit == "软件测试":
+            # 「软件测试/软件测评」：检测是否为工具/产品采购而非测试服务
+            if hit in ("软件测试", "软件测评"):
                 if any(word in window for word in tool_purchase_kws) and not any(word in window for word in service_override_kws):
                     continue
                 filtered.append(hit)
@@ -195,7 +193,7 @@ class KeywordEngine:
         borderline = self._filter_generic_safety_hits(text, self._hits(text, self.borderline_kws))
         non_target = self._hits(text, self.reject_kws)
         matched = list(dict.fromkeys(business + borderline + non_target))
-        strong_direct = {"渗透测试", "代码审计", "软件测试", "系统测试", "第三方软件测试"}
+        strong_direct = {"渗透测试", "代码审计", "软件测试", "软件测评", "系统测试", "第三方软件测试"}
 
         # 硬拒绝：运维/维保类项目一律 C，即使同时命中业务关键词
         ops_kws = {"运维", "运维服务", "集约运维", "运行维护", "安全运维", "网络运维", "系统运维", "维保服务"}

@@ -61,6 +61,9 @@ class Mailer:
 
     def send_report(self, items: Iterable[Item], start_date, end_date) -> bool:
         items = list(items)
+        if not items:
+            print(f"  [邮件] 无命中，跳过发送")
+            return True
         msg = EmailMessage()
         msg["Subject"] = f"招标监控日报 {start_date} ~ {end_date}: {len(items)} 条"
         msg["From"] = self.mail_from

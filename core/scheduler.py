@@ -72,7 +72,7 @@ class Scheduler:
             ai_c_count = 0
             kept = []
             for item in final:
-                if re.search(r"建议[：:]\\s*C\\b", item._ai_analysis or ""):
+                if re.search(r"建议[：:]\s*C\b", item._ai_analysis or ""):
                     item._filter_stage = "ai_c"
                     item._match_type = ""
                     ai_c_count += 1
