@@ -68,6 +68,8 @@ class KeywordEngine:
             "等级保护",
             "等保",
             "密评",
+            "安全服务",
+            "检测服务",
         ]
         physical_context = [
             "消防",
@@ -86,6 +88,15 @@ class KeywordEngine:
             "环境",
             "数据安全",
         ]
+        # 系统/平台类采购 含嵌入式安全检测 → 过滤
+        procurement_context = [
+            "系统服务", "平台服务", "集成服务", "开发服务",
+            "设备采购", "系统采购", "硬件采购", "产品采购",
+        ]
+        security_service_context = [
+            "安全服务", "检测服务", "测评服务", "安全检测服务",
+            "渗透测试", "漏洞扫描", "网络安全服务",
+        ]
         filtered = []
         for hit in hits:
             if hit not in generic:
@@ -94,6 +105,8 @@ class KeywordEngine:
             idx = text.find(hit)
             window = text[max(0, idx - 300): idx + len(hit) + 300] if idx >= 0 else text
             if any(word in window for word in physical_context):
+                continue
+            if any(word in window for word in procurement_context) and not any(word in window for word in security_service_context):
                 continue
             if any(word in window for word in cyber_context):
                 filtered.append(hit)
