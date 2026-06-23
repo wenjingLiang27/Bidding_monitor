@@ -21,7 +21,7 @@ def _load_mail_config(config_dir: str) -> dict:
             "mail_to": [],
         },
     )
-    return {k: (v[0] if isinstance(v, list) and v else "") for k, v in data.items()}
+    return {k: (",".join(v) if isinstance(v, list) and v else "") for k, v in data.items()}
 
 
 class Mailer:
@@ -62,8 +62,8 @@ class Mailer:
     def send_report(self, items: Iterable[Item], start_date, end_date) -> bool:
         items = list(items)
         if not items:
-            print(f"  [邮件] 无命中，跳过发送")
-            return True
+            print(f"  [邮件] 无命中，发送空报提醒")
+            items = []  # ensure it's an empty list
         msg = EmailMessage()
         msg["Subject"] = f"招标监控日报 {start_date} ~ {end_date}: {len(items)} 条"
         msg["From"] = self.mail_from

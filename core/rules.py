@@ -152,10 +152,16 @@ class KeywordEngine:
             "集成项目",
             "总集",
             "集成服务",
+            "需求分析",   # 「需求分析、设计、开发、系统测试」开发流程描述
+            "软件开发",   # 品目为软件开发服务的项目
+            "功能升级",   # 功能升级实施服务类开发项目
+            "上线部署",   # 上线部署类开发项目
+            "平台开发",   # 平台开发部署类项目
+            "开发部署",   # 开发部署类项目
         ]
         # 软件测试工具/产品采购上下文（非测试服务，应过滤）
         tool_purchase_kws = ["测试系统", "测试平台", "测试工具", "测试产品",
-                            "软件系统", "软件产品", "软件平台", "系统采购", "平台"]
+                            "软件系统", "软件产品", "软件平台", "系统采购", "系统"]
         service_override_kws = ["测试服务", "测评服务", "服务外包", "委托测试"]
         filtered = []
         for hit in hits:
@@ -165,9 +171,11 @@ class KeywordEngine:
             idx = text.find(hit)
             window = text[max(0, idx - 300): idx + len(hit) + 300] if idx >= 0 else text
             
-            # 「软件测试/软件测评」：检测是否为工具/产品采购而非测试服务
-            if hit in ("软件测试", "软件测评"):
+            # 「软件测试/软件测评/漏洞扫描」：检测是否为工具/产品采购或开发项目，非独立测试服务应过滤
+            if hit in ("软件测试", "软件测评", "漏洞扫描"):
                 if any(word in window for word in tool_purchase_kws) and not any(word in window for word in service_override_kws):
+                    continue
+                if any(word in window for word in dev_context):
                     continue
                 filtered.append(hit)
                 continue

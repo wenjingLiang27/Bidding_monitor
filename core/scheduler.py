@@ -59,6 +59,7 @@ class Scheduler:
         passed = self.scorer.filter(items)
         checked = body_fetch_pipeline(passed, self.rules, self.http)
         checked = zip_extract_pipeline(checked, self.scorer, self.attachment_parser)
+        checked = self._deduplicate_by_project(checked)
         final = []
         for item in checked:
             if item._filter_stage == "passed":
@@ -239,6 +240,27 @@ class Scheduler:
                 seen.add(_key(item.url))
                 base.append(item)
         return base
+
+    def _deduplicate_by_project(self, items: List[Item]) -> List[Item]:
+        """按项目编号去重，同一项目多平台发布只保留一条。"""
+        import re
+        proj_pattern = re.compile(r'项目编号[：:]\s*([A-Za-z0-9-]+)')
+        seen_proj = {}
+        result = []
+        for item in items:
+            m = proj_pattern.search(item.title)
+            if not m and item.body:
+                m = proj_pattern.search(item.body)
+            pid = m.group(1) if m else None
+            if pid and pid in seen_proj:
+                # 保留 ccgp.gov.cn 的（更权威），否则保留先出现的
+                if 'ccgp.gov.cn' in item.url and 'ccgp.gov.cn' not in seen_proj[pid].url:
+                    seen_proj[pid] = item
+                continue
+            if pid:
+                seen_proj[pid] = item
+            result.append(item)
+        return result
 
     def _split(self, value: str):
         return [x for x in (value or "").split(",") if x]
